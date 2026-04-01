@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import User from "./user.model";
+import { adminRoom, getIO } from "../../sockets/socket";
 
 // 🔥 Get all users (ADMIN only)
 export const getAllUsers = async (req: Request, res: Response) => {
@@ -39,6 +40,12 @@ export const updateUserRole = async (req: Request, res: Response) => {
       { role },
       { new: true }
     ).select("-password");
+
+    getIO().to(adminRoom()).emit("admin:user-role-updated", {
+      userId,
+      role,
+      updatedAt: new Date().toISOString(),
+    });
 
     res.json({
       message: "User role updated successfully",

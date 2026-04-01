@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import User from "../user/user.model";
 import jwt from "jsonwebtoken";
+import { adminRoom, getIO } from "../../sockets/socket";
 
 export const register = async (req: Request, res: Response) => {
   try {
@@ -44,6 +45,17 @@ export const register = async (req: Request, res: Response) => {
       password: hashedPassword,
     });
 
+    getIO().to(adminRoom()).emit("admin:user-created", {
+      user: {
+        _id: user._id.toString(),
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        createdAt: user.createdAt,
+      },
+      createdAt: new Date().toISOString(),
+    });
+
     res.status(201).json({
       message: "User registered successfully",
       user,
@@ -84,6 +96,7 @@ export const login = async (req: Request, res: Response) => {
     const token = jwt.sign(
       {
         userId: user._id,
+        email: user.email,
         role: user.role,
       },
       process.env.JWT_SECRET as string,
