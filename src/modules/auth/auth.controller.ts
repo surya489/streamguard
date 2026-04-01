@@ -45,20 +45,23 @@ export const register = async (req: Request, res: Response) => {
       password: hashedPassword,
     });
 
+    const safeUser = {
+      _id: user._id.toString(),
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
+
     getIO().to(adminRoom()).emit("admin:user-created", {
-      user: {
-        _id: user._id.toString(),
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        createdAt: user.createdAt,
-      },
+      user: safeUser,
       createdAt: new Date().toISOString(),
     });
 
     res.status(201).json({
       message: "User registered successfully",
-      user,
+      user: safeUser,
     });
   } catch (error) {
     res.status(500).json({ message: "Server error", error });

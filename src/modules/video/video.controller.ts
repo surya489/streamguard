@@ -1,6 +1,6 @@
 import { Response } from "express";
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 
 import { AuthRequest } from "../../middleware/auth.middleware";
 import { adminRoom, getIO, userRoom } from "../../sockets/socket";
@@ -8,6 +8,23 @@ import Video from "./video.model";
 
 type VideoStatus = "UPLOADING" | "PROCESSING" | "COMPLETED";
 type Sensitivity = "SAFE" | "FLAGGED";
+
+const uploadsDir = path.join(process.cwd(), "uploads");
+
+function ensureUploadsDir() {
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+}
+
+function sanitizeFileName(name: string) {
+  return name.replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+
+function buildLocalFileName(userId: string, originalName: string) {
+  const safeOriginal = sanitizeFileName(path.basename(originalName));
+  return `${Date.now()}-${userId}-${safeOriginal}`;
+}
 
 function emitVideoProgress(params: {
   userId: string;
@@ -23,15 +40,6 @@ function emitVideoProgress(params: {
     sensitivity: params.sensitivity ?? null,
     updatedAt: new Date().toISOString(),
   });
-}
-
-function getVideoContentType(filename: string): string {
-  const extension = path.extname(filename).toLowerCase();
-
-  if (extension === ".webm") return "video/webm";
-  if (extension === ".mov") return "video/quicktime";
-  if (extension === ".mkv") return "video/x-matroska";
-  return "video/mp4";
 }
 
 function delay(ms: number) {
@@ -90,9 +98,15 @@ export const uploadVideo = async (req: AuthRequest, res: Response) => {
       });
     }
 
+    ensureUploadsDir();
+    const localFileName = buildLocalFileName(req.user.userId, req.file.originalname);
+    const destinationPath = path.join(uploadsDir, localFileName);
+
+    await fs.promises.writeFile(destinationPath, req.file.buffer);
+
     const video = await Video.create({
       title: (title || "").trim() || req.file.originalname,
-      filename: req.file.filename,
+      filename: localFileName,
       user: req.user.userId,
       status: "UPLOADING",
     });
@@ -110,7 +124,8 @@ export const uploadVideo = async (req: AuthRequest, res: Response) => {
       video,
     });
   } catch (error) {
-    res.status(500).json({ message: "Server error", error });
+    console.error("Upload failed:", error);
+    res.status(500).json({ message: "Video upload failed" });
   }
 };
 
@@ -175,24 +190,25 @@ export const streamVideo = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: "Access denied" });
     }
 
-    const videoPath = path.join(__dirname, "../../../uploads", video.filename);
+    const filePath = path.join(uploadsDir, video.filename);
 
-    if (!fs.existsSync(videoPath)) {
+    if (!fs.existsSync(filePath)) {
       return res.status(404).json({ message: "Video file missing on server" });
     }
 
-    const stat = fs.statSync(videoPath);
+    const stat = await fs.promises.stat(filePath);
     const fileSize = stat.size;
-    const contentType = getVideoContentType(video.filename);
+    const ext = path.extname(video.filename).toLowerCase();
+    const contentType = ext === ".webm" ? "video/webm" : ext === ".mov" ? "video/quicktime" : ext === ".mkv" ? "video/x-matroska" : "video/mp4";
     const range = req.headers.range;
 
     if (!range) {
-      res.writeHead(200, {
+      res.status(200);
+      res.set({
         "Content-Length": fileSize,
         "Content-Type": contentType,
       });
-
-      fs.createReadStream(videoPath).pipe(res);
+      fs.createReadStream(filePath).pipe(res);
       return;
     }
 
@@ -206,11 +222,6 @@ export const streamVideo = async (req: AuthRequest, res: Response) => {
 
     const chunkSize = end - start + 1;
 
-    const file = fs.createReadStream(videoPath, {
-      start,
-      end,
-    });
-
     const headers = {
       "Content-Range": `bytes ${start}-${end}/${fileSize}`,
       "Accept-Ranges": "bytes",
@@ -219,7 +230,7 @@ export const streamVideo = async (req: AuthRequest, res: Response) => {
     };
 
     res.writeHead(206, headers);
-    file.pipe(res);
+    fs.createReadStream(filePath, { start, end }).pipe(res);
   } catch (error) {
     res.status(500).json({ message: "Streaming error", error });
   }
