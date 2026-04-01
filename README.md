@@ -54,12 +54,19 @@ Important note:
 - AWS path is not active in current upload/stream controller.
 
 ## 6. Environment Variables
-Create `.env` in backend root:
+Use this exact format in backend `.env`:
 
 ```env
-PORT=5000
-MONGO_URI=<your-mongodb-uri>
-JWT_SECRET=<your-jwt-secret>
+PORT=PORT
+MONGO_URI=MONGO_URI
+JWT_SECRET=JWT_SECRET
+```
+
+Backend value examples:
+```env
+PORT=YOUR_PORT
+MONGO_URI=YOUR_MONGO_URI
+JWT_SECRET=YOUR_JWT_SECRET
 ```
 
 ## 7. Setup and Run
