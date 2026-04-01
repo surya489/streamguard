@@ -153,11 +153,28 @@ npm run start
 - Why this design helps:
   - Frontend can show immediate moderation outcome without polling.
   - Admin and normal users see consistent status/sensitivity state across pages.
-## 14. Troubleshooting
+
+## 14. Testing
+- I added backend test file:
+  - `src/tests/socket.test.ts`
+- Why I created it:
+  - I wanted to verify room key generation used by realtime events is stable and predictable.
+- What it tests:
+  - `userRoom("abc123") -> "user:abc123"`
+  - `userRoom("42") -> "user:42"`
+- How to run:
+  ```bash
+  npm run test
+  ```
+- How this helps me:
+  - It protects socket naming contracts from accidental regressions.
+  - It improves confidence that event targeting remains correct per user room.
+## 15. Troubleshooting
 - If upload fails, I check write permission on `uploads/`.
 - If DB connection fails, I verify `MONGO_URI`.
 - If auth fails, I verify `JWT_SECRET` and token validity.
 - If stream fails, I verify video metadata and file presence in `uploads/`.
 - If socket events are missing, I verify client token auth and socket connection.
+
 
 
